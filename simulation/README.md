@@ -1,6 +1,6 @@
 # Football Match Simulator
 
-A Python script that simulates realistic football match events between Al Hilal and Al Nassr teams using their player data.
+A Python script that simulates realistic football match events between Al Hilal and Al Nassr teams using their player data, with webhook integration and automatic retry for failed events.
 
 ## Features
 
@@ -9,6 +9,9 @@ A Python script that simulates realistic football match events between Al Hilal 
 - Random team formations for each simulation
 - Progress bar using tqdm
 - JSON-compatible event structure for analytics
+- **Webhook integration**: Events are sent to a configurable webhook URL in real-time
+- **Failed events handling**: Failed webhook deliveries are automatically saved to SQLite database
+- **Retry mechanism**: Separate script to retry failed events with configurable retry limits
 - Virtual environment setup for isolated dependencies
 
 ## Requirements
@@ -18,11 +21,7 @@ A Python script that simulates realistic football match events between Al Hilal 
 
 ## Setup
 
-### Option 1: Using existing virtual environment (recommended)
-The virtual environment is already set up in the `venv/` folder with all dependencies installed.
-
-### Option 2: Fresh setup
-If you need to set up the environment from scratch:
+### Virtual Environment Setup
 
 ```bash
 # Create virtual environment
@@ -38,18 +37,50 @@ pip install -r requirements.txt
 pip list | grep tqdm
 ```
 
+### Webhook Configuration
+
+The simulation sends events to a webhook URL. The default webhook URL is configured in `simulate_match.py`:
+
+```python
+WEBHOOK_URL = "https://71d6f6b300c84269d0cfe79a02a8cb00.m.pipedream.net"
+```
+
+You can modify this URL in the script to point to your own webhook endpoint.
+
 ## Usage
 
-### Option 1: Using the run script (recommended)
+### Running the Simulation
+
+First, ensure the virtual environment is set up and activated:
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+```
+
+### Option 1: Using the run script
 ```bash
 ./run_simulation.sh
 ```
 
-### Option 2: Manual activation
+### Option 2: Manual execution
 ```bash
-source venv/bin/activate
 python simulate_match.py
 ```
+
+### Retrying Failed Events
+
+If some events failed to send during simulation, you can retry them using the retry script:
+
+```bash
+python retry_failed_events.py
+```
+
+The retry script will:
+- Read failed events from the SQLite database
+- Attempt to resend them to the webhook
+- Remove successfully resent events from the database
+- Respect retry limits (default: 3 retries per event)
 
 ## Output
 
@@ -57,7 +88,53 @@ The simulation generates:
 - Starting lineups for both teams with random formations
 - Minute-by-minute event logs
 - Progress bar showing simulation progress
+- Real-time webhook delivery status (success/failure counts)
 - Summary statistics (total events, events per minute, average)
+- Failed events are automatically saved to `failed_events.db` for later retry
+
+### Webhook Delivery
+
+Each event is sent to the configured webhook URL as a JSON payload. The simulation tracks:
+- ✅ Successfully sent events
+- ❌ Failed events (saved to database with error details)
+
+### Database
+
+Failed events are stored in `failed_events.db` with the following structure:
+- `id`: Auto-incrementing primary key
+- `event_data`: JSON string of the failed event
+- `failure_reason`: Description of why the event failed
+- `created_at`: Timestamp when the failure occurred
+- `retry_count`: Number of retry attempts (default: 0)
+
+## Retry Failed Events
+
+The `retry_failed_events.py` script provides functionality to retry events that failed to send during simulation:
+
+### Features
+- Reads failed events from the SQLite database
+- Attempts to resend events to the webhook with configurable retry limits
+- Removes successfully resent events from the database
+- Provides detailed logging of retry attempts and results
+- Respects maximum retry count per event (default: 3 retries)
+
+### Configuration
+- **Database**: `failed_events.db` (same as simulation)
+- **Webhook URL**: Configurable in the script (same as simulation)
+- **Max retries per event**: Configurable (default: 3)
+- **Delay between retries**: Configurable (default: 1 second)
+
+### Usage
+```bash
+python retry_failed_events.py
+```
+
+### Output
+The retry script provides:
+- Count of failed events found
+- Real-time status of each retry attempt
+- Summary of successful vs failed retries
+- Remaining failed events count
 
 ## Event Structure
 
@@ -252,6 +329,7 @@ Each event follows this base JSON structure:
 ## Dependencies
 
 - tqdm: Progress bar library (version 4.67.1)
-- Standard Python libraries: csv, random, uuid, json, datetime
+- requests: HTTP library for webhook communication
+- Standard Python libraries: csv, random, uuid, json, datetime, sqlite3
 
 All dependencies are listed in `requirements.txt` and managed in the local virtual environment.
