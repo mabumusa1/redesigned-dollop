@@ -1,0 +1,60 @@
+{
+  "name": "Fanfinity Analytics",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "ms-azuretools.vscode-docker",
+        "esbenp.prettier-vscode",
+        "redhat.vscode-yaml",
+        "cweijan.dbclient-jdbc"
+      ],
+      "settings": {
+        "go.toolsManagement.autoUpdate": true,
+        "go.useLanguageServer": true,
+        "go.lintTool": "golangci-lint",
+        "go.lintFlags": ["--fast"],
+        "editor.formatOnSave": true,
+        "[go]": {
+          "editor.defaultFormatter": "golang.go"
+        }
+      }
+    }
+  },
+
+  "forwardPorts": [8080, 8123, 9000, 9092, 8081, 9090, 3005],
+  "portsAttributes": {
+    "8080": { "label": "API Server", "onAutoForward": "notify" },
+    "8123": { "label": "ClickHouse HTTP", "onAutoForward": "silent" },
+    "9000": { "label": "ClickHouse Native", "onAutoForward": "silent" },
+    "9092": { "label": "Kafka", "onAutoForward": "silent" },
+    "8081": { "label": "Kafka UI", "onAutoForward": "notify" },
+    "9090": { "label": "Prometheus", "onAutoForward": "silent" },
+    "3005": { "label": "Grafana", "onAutoForward": "notify" }
+  },
+
+  "postCreateCommand": "go mod download 2>/dev/null || echo 'No go.mod yet'",
+  "postStartCommand": "echo 'Waiting for services...' && sleep 10 && curl -s http://clickhouse:8123/ping && echo ' ClickHouse ready!' && curl -s http://prometheus:9090/-/healthy && echo ' Prometheus ready!' && echo ' Kafka UI: http://localhost:8081'",
+
+  "remoteEnv": {
+    "KAFKA_BOOTSTRAP_SERVERS": "kafka:29092",
+    "KAFKA_TOPIC_PREFIX": "fanfinity.",
+    "KAFKA_AUTO_CREATE_TOPICS": "true",
+    "CLICKHOUSE_HOST": "clickhouse",
+    "CLICKHOUSE_PORT": "9000",
+    "CLICKHOUSE_HTTP_PORT": "8123",
+    "CLICKHOUSE_DATABASE": "fanfinity",
+    "CLICKHOUSE_USER": "default",
+    "CLICKHOUSE_PASSWORD": "",
+    "PROMETHEUS_URL": "http://prometheus:9090",
+    "GRAFANA_URL": "http://grafana:3000"
+  }
+}

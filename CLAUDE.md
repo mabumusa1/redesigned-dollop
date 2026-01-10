@@ -6,6 +6,54 @@ Real-time fan engagement analytics microservice for processing match events duri
 
 **Read `context.md` for full requirements.**
 
+## Architecture
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────────┐    ┌────────────┐
+│   HTTP      │───▶│   Kafka     │───▶│  Batch Consumer │───▶│ ClickHouse │
+│   Ingest    │    │   (durable) │    │                 │    │            │
+└─────────────┘    └─────────────┘    └─────────────────┘    └────────────┘
+      │                   │
+      │              ┌────┴────┐
+      ▼              │  Topics │
+   202 Accepted      ├─────────┤
+   (immediate)       │ events  │
+                     │ retry   │
+                     │ dead    │
+                     └─────────┘
+```
+
+## Tech Stack
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Language | Go 1.22 | High-performance services |
+| Message Queue | Kafka | Zero data loss, durability |
+| Database | ClickHouse | Real-time analytics |
+| Metrics | Prometheus | Observability |
+| Dashboards | Grafana | Visualization |
+
+## Development Environment
+
+The project uses a **devcontainer** with all dependencies pre-configured:
+
+```bash
+# Open in VS Code
+code .
+# Press F1 → "Dev Containers: Reopen in Container"
+```
+
+### Services Available
+
+| Service | Port | URL |
+|---------|------|-----|
+| API Server | 8080 | http://localhost:8080 |
+| Kafka | 9092 | localhost:9092 |
+| Kafka UI | 8081 | http://localhost:8081 |
+| ClickHouse HTTP | 8123 | http://localhost:8123 |
+| Prometheus | 9090 | http://localhost:9090 |
+| Grafana | 3000 | http://localhost:3000 |
+
 ## Planning Agents
 
 This project uses specialized Claude agents for architecture planning. All agent configurations are in `.claude/`.
@@ -27,7 +75,7 @@ This project uses specialized Claude agents for architecture planning. All agent
 "Run /plan-all for the analytics service"
 
 # Specific planning
-"Run /plan-architecture focusing on the buffering strategy"
+"Run /plan-architecture focusing on the Kafka consumer strategy"
 "Run /plan-data for ClickHouse schema"
 
 # Iterative refinement
@@ -38,7 +86,8 @@ This project uses specialized Claude agents for architecture planning. All agent
 ## Key Constraints
 
 - **Storage:** ClickHouse ONLY (no Redis, no PostgreSQL)
-- **Focus:** Bulk HTTP ingestion (not source-to-destination sync)
+- **Message Queue:** Kafka for durable event buffering
+- **Focus:** Bulk HTTP ingestion with Kafka-backed durability
 - **Performance:** 1000 req/s, sub-200ms latency
 - **Reliability:** Zero data loss
 
@@ -47,10 +96,12 @@ This project uses specialized Claude agents for architecture planning. All agent
 The planning follows [jitsucom/bulker](https://github.com/jitsucom/bulker) ingestion patterns:
 
 1. **Context Pattern** - Central dependency container
-2. **Async Ingestion** - Never block on writes, return 202 immediately
-3. **Batch Writes** - Buffer events, write to ClickHouse in batches
-4. **Graceful Lifecycle** - InitContext, Shutdown with buffer flush
-5. **Prometheus Metrics** - p50, p95, p99 latency histograms
+2. **Kafka Durability** - Write to Kafka immediately, return 202
+3. **Batch Consumer** - Read from Kafka, batch write to ClickHouse
+4. **Retry Topics** - Failed events go to retry topic with exponential backoff
+5. **Dead Letter Queue** - Permanently failed events for investigation
+6. **Graceful Lifecycle** - InitContext, Shutdown with proper cleanup
+7. **Prometheus Metrics** - RED method + Kafka consumer lag
 
 ## Output Structure
 
@@ -69,6 +120,7 @@ output/
 ├── internal/
 │   ├── app/
 │   ├── api/
+│   ├── kafka/
 │   ├── domain/
 │   └── repository/
 ├── migrations/
@@ -89,6 +141,6 @@ All planning agents use deep reasoning:
 ## Files
 
 - `context.md` - Project requirements
+- `.devcontainer/` - Development environment configuration
 - `.claude/` - Agent configurations and prompts
 - `.claude/commands/` - Planning command definitions
-- `.claude/prompts/` - Deep reasoning prompt templates
