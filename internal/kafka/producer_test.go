@@ -11,29 +11,6 @@ import (
 	"fanfinity/internal/domain"
 )
 
-// mockWriter is a mock implementation of kafka.Writer for testing.
-type mockWriter struct {
-	messages     []kafka.Message
-	writeErr     error
-	topic        string
-	writeCalled  bool
-	closeCalled  bool
-}
-
-func (m *mockWriter) WriteMessages(ctx context.Context, msgs ...kafka.Message) error {
-	m.writeCalled = true
-	if m.writeErr != nil {
-		return m.writeErr
-	}
-	m.messages = append(m.messages, msgs...)
-	return nil
-}
-
-func (m *mockWriter) Close() error {
-	m.closeCalled = true
-	return nil
-}
-
 func TestNewEventProducer(t *testing.T) {
 	writer := &kafka.Writer{Topic: "test-topic"}
 

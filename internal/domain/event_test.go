@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -643,7 +644,7 @@ func TestIsValidationError(t *testing.T) {
 		t.Error("expected IsValidationError to return true for ValidationError")
 	}
 
-	regularErr := json.Unmarshal([]byte("invalid"), nil)
+	regularErr := errors.New("regular error")
 	if domain.IsValidationError(regularErr) {
 		t.Error("expected IsValidationError to return false for regular error")
 	}
@@ -661,7 +662,7 @@ func TestAsValidationError(t *testing.T) {
 		t.Errorf("expected Field 'field', got '%s'", extracted.Field)
 	}
 
-	regularErr := json.Unmarshal([]byte("invalid"), nil)
+	regularErr := errors.New("regular error")
 	extracted = domain.AsValidationError(regularErr)
 	if extracted != nil {
 		t.Error("expected AsValidationError to return nil for regular error")

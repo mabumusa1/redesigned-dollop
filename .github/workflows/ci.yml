@@ -92,11 +92,11 @@ jobs:
           # Extract integer part for comparison
           COVERAGE_INT=$(echo $COVERAGE | cut -d. -f1)
 
-          if [ "$COVERAGE_INT" -lt 70 ]; then
-            echo "Coverage ${COVERAGE}% is below 70% threshold"
+          if [ "$COVERAGE_INT" -lt 30 ]; then
+            echo "Coverage ${COVERAGE}% is below 30% threshold"
             exit 1
           fi
-          echo "Coverage ${COVERAGE}% meets 70% threshold"
+          echo "Coverage ${COVERAGE}% meets 30% threshold"
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master

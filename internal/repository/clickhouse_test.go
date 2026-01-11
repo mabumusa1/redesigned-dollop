@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -113,7 +114,7 @@ func TestClickHouseRepository_InsertBatch_EmptyBatch(t *testing.T) {
 	repo := NewClickHouseRepository(nil, nil)
 
 	// Empty batch should return nil without error
-	err := repo.InsertBatch(nil, nil)
+	err := repo.InsertBatch(context.Background(), nil)
 	if err != nil {
 		t.Errorf("expected nil error for empty batch, got: %v", err)
 	}
@@ -122,7 +123,7 @@ func TestClickHouseRepository_InsertBatch_EmptyBatch(t *testing.T) {
 func TestClickHouseRepository_GetMatchMetrics_EmptyMatchID(t *testing.T) {
 	repo := NewClickHouseRepository(nil, nil)
 
-	metrics, err := repo.GetMatchMetrics(nil, "")
+	metrics, err := repo.GetMatchMetrics(context.Background(), "")
 	if err == nil {
 		t.Error("expected error for empty matchID")
 	}
@@ -137,7 +138,7 @@ func TestClickHouseRepository_GetMatchMetrics_EmptyMatchID(t *testing.T) {
 func TestClickHouseRepository_GetEventsPerMinute_EmptyMatchID(t *testing.T) {
 	repo := NewClickHouseRepository(nil, nil)
 
-	events, err := repo.GetEventsPerMinute(nil, "")
+	events, err := repo.GetEventsPerMinute(context.Background(), "")
 	if err == nil {
 		t.Error("expected error for empty matchID")
 	}
