@@ -102,6 +102,7 @@ jobs:
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6
+        continue-on-error: true  # Don't fail CI if SonarCloud project not set up yet
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
