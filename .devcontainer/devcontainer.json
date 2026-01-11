@@ -5,7 +5,11 @@
   "workspaceFolder": "/workspace",
 
   "features": {
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12",
+      "installTools": true
+    }
   },
 
   "customizations": {
@@ -15,7 +19,9 @@
         "ms-azuretools.vscode-docker",
         "esbenp.prettier-vscode",
         "redhat.vscode-yaml",
-        "cweijan.dbclient-jdbc"
+        "cweijan.dbclient-jdbc",
+        "ms-python.python",
+        "ms-python.vscode-pylance"
       ],
       "settings": {
         "go.toolsManagement.autoUpdate": true,
@@ -25,6 +31,11 @@
         "editor.formatOnSave": true,
         "[go]": {
           "editor.defaultFormatter": "golang.go"
+        },
+        "python.defaultInterpreterPath": "/workspace/.venv/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.python"
         }
       }
     }
@@ -41,10 +52,14 @@
     "3005": { "label": "Grafana", "onAutoForward": "notify" }
   },
 
-  "postCreateCommand": "go mod download 2>/dev/null || echo 'No go.mod yet'",
+  "postCreateCommand": "go mod download 2>/dev/null || echo 'No go.mod yet' && python3 -m venv /workspace/.venv && /workspace/.venv/bin/pip install --upgrade pip && ([ -f /workspace/requirements.txt ] && /workspace/.venv/bin/pip install -r /workspace/requirements.txt || true) && ([ -f /workspace/simulation/requirements.txt ] && /workspace/.venv/bin/pip install -r /workspace/simulation/requirements.txt || true)",
   "postStartCommand": "echo 'Waiting for services...' && sleep 10 && curl -s http://clickhouse:8123/ping && echo ' ClickHouse ready!' && curl -s http://prometheus:9090/-/healthy && echo ' Prometheus ready!' && echo ' Kafka UI: http://localhost:8081'",
 
   "remoteEnv": {
+    "GOPATH": "/home/vscode/go",
+    "GOMODCACHE": "/home/vscode/go/pkg/mod",
+    "VIRTUAL_ENV": "/workspace/.venv",
+    "PATH": "/home/vscode/go/bin:/workspace/.venv/bin:${containerEnv:PATH}",
     "KAFKA_BOOTSTRAP_SERVERS": "kafka:29092",
     "KAFKA_TOPIC_PREFIX": "fanfinity.",
     "KAFKA_AUTO_CREATE_TOPICS": "true",

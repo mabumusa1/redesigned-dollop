@@ -31,8 +31,9 @@ func main() {
 	// Load configuration from environment
 	cfg := app.LoadConfig()
 
-	// Initialize application context (ClickHouse, Kafka connections)
-	appCtx, err := app.NewContext(cfg, logger)
+	// Initialize application context (ClickHouse, Kafka producer - NO consumer)
+	// The server only produces events to Kafka; consumption is handled by the standalone consumer
+	appCtx, err := app.NewServerContext(cfg, logger)
 	if err != nil {
 		logger.Error("failed to initialize application context",
 			slog.String("error", err.Error()),

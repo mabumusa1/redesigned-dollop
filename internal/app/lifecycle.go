@@ -92,14 +92,14 @@ func WaitForShutdownWithContext(parentCtx context.Context, ctx *AppContext, time
 //	    cfg := app.LoadConfig()
 //	    logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 //
-//	    app.RunWithGracefulShutdown(cfg, logger, 30*time.Second, func(ctx *app.AppContext) error {
+//	    app.RunWithGracefulShutdown(cfg, logger, 30*time.Second, opts, func(ctx *app.AppContext) error {
 //	        // Start your servers and workers here
 //	        return nil
 //	    })
 //	}
-func RunWithGracefulShutdown(cfg *Config, logger *slog.Logger, timeout time.Duration, startup func(*AppContext) error) {
+func RunWithGracefulShutdown(cfg *Config, logger *slog.Logger, timeout time.Duration, opts ContextOptions, startup func(*AppContext) error) {
 	// Initialize the application context
-	ctx, err := NewContext(cfg, logger)
+	ctx, err := NewContext(cfg, logger, opts)
 	if err != nil {
 		logger.Error("Failed to initialize application context",
 			slog.String("error", err.Error()),

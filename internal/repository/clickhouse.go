@@ -217,7 +217,7 @@ func (r *ClickHouseRepository) GetMatchMetrics(ctx context.Context, matchID stri
 		WHERE match_id = ?
 	`, matchID)
 
-	var totalEvents, goals, yellowCards, redCards int64
+	var totalEvents, goals, yellowCards, redCards uint64
 	var firstEventAt, lastEventAt time.Time
 
 	err := row.Scan(&totalEvents, &goals, &yellowCards, &redCards, &firstEventAt, &lastEventAt)
@@ -240,10 +240,10 @@ func (r *ClickHouseRepository) GetMatchMetrics(ctx context.Context, matchID stri
 		return nil, nil
 	}
 
-	metrics.TotalEvents = totalEvents
-	metrics.Goals = goals
-	metrics.YellowCards = yellowCards
-	metrics.RedCards = redCards
+	metrics.TotalEvents = int64(totalEvents)
+	metrics.Goals = int64(goals)
+	metrics.YellowCards = int64(yellowCards)
+	metrics.RedCards = int64(redCards)
 
 	// Set time pointers only if we have events
 	if !firstEventAt.IsZero() {
@@ -276,14 +276,14 @@ func (r *ClickHouseRepository) GetMatchMetrics(ctx context.Context, matchID stri
 
 	for rows.Next() {
 		var eventType string
-		var eventCount int64
+		var eventCount uint64
 		if err := rows.Scan(&eventType, &eventCount); err != nil {
 			r.logger.Warn("failed to scan event type row",
 				slog.String("error", err.Error()),
 			)
 			continue
 		}
-		metrics.EventsByType[eventType] = eventCount
+		metrics.EventsByType[eventType] = int64(eventCount)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -310,12 +310,12 @@ func (r *ClickHouseRepository) GetMatchMetrics(ctx context.Context, matchID stri
 	`, matchID)
 
 	var peakMinute time.Time
-	var peakCount int64
+	var peakCount uint64
 	err = peakRow.Scan(&peakMinute, &peakCount)
 	if err == nil && peakCount > 0 {
 		metrics.PeakMinute = &domain.PeakEngagement{
 			Minute:     peakMinute,
-			EventCount: peakCount,
+			EventCount: int64(peakCount),
 		}
 	}
 
@@ -324,7 +324,7 @@ func (r *ClickHouseRepository) GetMatchMetrics(ctx context.Context, matchID stri
 
 	r.logger.Debug("successfully retrieved match metrics",
 		slog.String("match_id", matchID),
-		slog.Int64("total_events", totalEvents),
+		slog.Int64("total_events", int64(totalEvents)),
 		slog.Duration("duration", duration),
 	)
 
@@ -365,14 +365,20 @@ func (r *ClickHouseRepository) GetEventsPerMinute(ctx context.Context, matchID s
 
 	var results []domain.EventsPerMinute
 	for rows.Next() {
-		var epm domain.EventsPerMinute
-		if err := rows.Scan(&epm.Minute, &epm.EventType, &epm.EventCount); err != nil {
+		var minute time.Time
+		var eventType string
+		var eventCount uint64
+		if err := rows.Scan(&minute, &eventType, &eventCount); err != nil {
 			r.logger.Warn("failed to scan events per minute row",
 				slog.String("error", err.Error()),
 			)
 			continue
 		}
-		results = append(results, epm)
+		results = append(results, domain.EventsPerMinute{
+			Minute:     minute,
+			EventType:  eventType,
+			EventCount: int64(eventCount),
+		})
 	}
 
 	if err := rows.Err(); err != nil {

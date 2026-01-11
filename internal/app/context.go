@@ -26,8 +26,15 @@ type AppContext struct {
 	shutdownCh chan struct{}
 }
 
+// ContextOptions configures which components to initialize.
+type ContextOptions struct {
+	InitProducer bool // Initialize Kafka producer (for API server)
+	InitConsumer bool // Initialize Kafka consumer (for consumer service)
+}
+
 // NewContext creates and initializes a new AppContext with all dependencies.
-func NewContext(cfg *Config, logger *slog.Logger) (*AppContext, error) {
+// Use opts to control which Kafka components to initialize.
+func NewContext(cfg *Config, logger *slog.Logger, opts ContextOptions) (*AppContext, error) {
 	ctx := &AppContext{
 		Config:     cfg,
 		Logger:     logger,
@@ -44,22 +51,36 @@ func NewContext(cfg *Config, logger *slog.Logger) (*AppContext, error) {
 		slog.String("database", cfg.ClickHouse.Database),
 	)
 
-	// Initialize Kafka producer
-	ctx.initKafkaProducer()
-	logger.Info("Kafka producer initialized",
-		slog.String("brokers", cfg.Kafka.BootstrapServers),
-		slog.String("topic", cfg.Kafka.TopicEvents),
-	)
+	// Initialize Kafka producer (only for API server)
+	if opts.InitProducer {
+		ctx.initKafkaProducer()
+		logger.Info("Kafka producer initialized",
+			slog.String("brokers", cfg.Kafka.BootstrapServers),
+			slog.String("topic", cfg.Kafka.TopicEvents),
+		)
+	}
 
-	// Initialize Kafka consumer
-	ctx.initKafkaConsumer()
-	logger.Info("Kafka consumer initialized",
-		slog.String("brokers", cfg.Kafka.BootstrapServers),
-		slog.String("topic", cfg.Kafka.TopicEvents),
-		slog.String("group", cfg.Consumer.ConsumerGroup),
-	)
+	// Initialize Kafka consumer (only for consumer service)
+	if opts.InitConsumer {
+		ctx.initKafkaConsumer()
+		logger.Info("Kafka consumer initialized",
+			slog.String("brokers", cfg.Kafka.BootstrapServers),
+			slog.String("topic", cfg.Kafka.TopicEvents),
+			slog.String("group", cfg.Consumer.ConsumerGroup),
+		)
+	}
 
 	return ctx, nil
+}
+
+// NewServerContext creates an AppContext for the API server (producer only, no consumer).
+func NewServerContext(cfg *Config, logger *slog.Logger) (*AppContext, error) {
+	return NewContext(cfg, logger, ContextOptions{InitProducer: true, InitConsumer: false})
+}
+
+// NewConsumerContext creates an AppContext for the consumer service (consumer only, no producer).
+func NewConsumerContext(cfg *Config, logger *slog.Logger) (*AppContext, error) {
+	return NewContext(cfg, logger, ContextOptions{InitProducer: false, InitConsumer: true})
 }
 
 // initClickHouse establishes a connection to ClickHouse with appropriate settings.

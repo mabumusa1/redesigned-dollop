@@ -11,7 +11,8 @@ ALHILAL_CSV = "alhilal.csv"
 ALNASSR_CSV = "alnassr.csv"
 
 # Webhook URL for sending events
-WEBHOOK_URL = "https://71d6f6b300c84269d0cfe79a02a8cb00.m.pipedream.net"
+# WEBHOOK_URL = "https://71d6f6b300c84269d0cfe79a02a8cb00.m.pipedream.net"
+WEBHOOK_URL = "http://localhost:8080/api/events"
 
 # Database file for failed events
 FAILED_EVENTS_DB = "failed_events.db"
@@ -147,7 +148,7 @@ def create_event(event_type, match_id, minute, team_id, player, all_players, cur
         "eventId": str(uuid.uuid4()),
         "matchId": match_id,
         "eventType": event_type,
-        "timestamp": (current_time + timedelta(minutes=minute-1)).isoformat(),
+        "timestamp": (current_time + timedelta(minutes=minute-1)).isoformat() + "Z",
         "teamId": team_id,
         "playerId": player['id'],
         "metadata": get_event_metadata(event_type, player, all_players, team_id, team1_id, team2_id)
@@ -205,7 +206,7 @@ def simulate_events(team1, team2, team1_id=TEAM_ID_AL_HILAL, team2_id=TEAM_ID_AL
                 # Always try to send event to webhook
                 try:
                     response = requests.post(WEBHOOK_URL, json=event, timeout=5)
-                    if response.status_code == 200:
+                    if response.status_code in (200, 202):  # 202 Accepted for async processing
                         sent_events += 1
                     else:
                         failed_events += 1
