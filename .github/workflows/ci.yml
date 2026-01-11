@@ -99,6 +99,7 @@ jobs:
           echo "Coverage ${COVERAGE}% meets 30% threshold"
 
       - name: SonarCloud Scan
+        if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

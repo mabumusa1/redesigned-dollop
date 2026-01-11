@@ -31,9 +31,9 @@ func (m *MockProducer) Produce(ctx context.Context, event *domain.Event) error {
 
 // MockRepository implements api.MetricsRepository for testing.
 type MockRepository struct {
-	GetMatchMetricsFunc   func(ctx context.Context, matchID string) (*domain.MatchMetrics, error)
+	GetMatchMetricsFunc    func(ctx context.Context, matchID string) (*domain.MatchMetrics, error)
 	GetEventsPerMinuteFunc func(ctx context.Context, matchID string) ([]domain.EventsPerMinute, error)
-	PingFunc              func(ctx context.Context) error
+	PingFunc               func(ctx context.Context) error
 }
 
 func (m *MockRepository) GetMatchMetrics(ctx context.Context, matchID string) (*domain.MatchMetrics, error) {
