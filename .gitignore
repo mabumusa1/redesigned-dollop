@@ -1,3 +1,27 @@
+# Go build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go module cache (local)
+.go/
+
+# Go build cache
+.cache/
+
+# Go test coverage
+coverage.out
+coverage.html
+*.test
+*.out
+
+# Go workspace files
+go.work
+go.work.sum
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 __pycache__
@@ -134,6 +158,10 @@ dmypy.json
 # IDEs
 .vscode/
 .idea/
+
+# Claude Code local settings
+.claude/settings.local.json
+.claude/plans/
 *.swp
 *.swo
 *~
@@ -170,6 +198,7 @@ yarn-error.log*
 # Data files (uncomment if you want to ignore CSV files)
 # *.csv
 
-# Simulation outputs (uncomment if you want to ignore generated data)
+# Simulation outputs
+simulation/failed_events.db
 # simulation_output/
 # events.json
