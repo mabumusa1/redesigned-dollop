@@ -76,8 +76,10 @@ func (h *Handler) IngestEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Record metrics
+	duration := time.Since(start)
 	RecordEventIngested(string(event.EventType))
-	RecordEventIngestDuration(time.Since(start))
+	RecordEventIngestDuration(duration)
+	RecordEventResponseTime(duration)
 
 	// Return 202 Accepted
 	response := IngestEventResponse{
@@ -150,6 +152,9 @@ func (h *Handler) GetMatchMetrics(w http.ResponseWriter, r *http.Request) {
 
 	// Update metrics with peak engagement
 	metrics.PeakMinute = peak
+
+	// Add response time percentiles
+	metrics.ResponseTimePercentiles = GetEventResponseTimePercentiles()
 
 	respondJSON(w, http.StatusOK, metrics)
 }

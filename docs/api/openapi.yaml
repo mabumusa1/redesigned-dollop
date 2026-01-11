@@ -1,0 +1,413 @@
+openapi: 3.0.3
+info:
+  title: Fanfinity Analytics API
+  description: |
+    Real-time fan engagement analytics service for processing live match events.
+
+    ## Overview
+    This API enables:
+    - Ingestion of match events (goals, cards, passes, etc.)
+    - Real-time engagement metrics retrieval
+    - Health and readiness monitoring
+    - Prometheus metrics exposure
+
+    ## Architecture
+    Events are ingested via HTTP, durably stored in Kafka, batch-processed by consumers,
+    and stored in ClickHouse for real-time analytics queries.
+
+    ## Rate Limits
+    The service is designed to handle 1000+ requests/second with sub-200ms latency.
+  version: 1.0.0
+  contact:
+    name: Fanfinity Engineering
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Events
+    description: Match event ingestion
+  - name: Metrics
+    description: Engagement metrics retrieval
+  - name: Health
+    description: Service health and readiness
+
+paths:
+  /api/events:
+    post:
+      tags:
+        - Events
+      summary: Ingest a match event
+      description: |
+        Accepts a match event for asynchronous processing. The event is validated,
+        produced to Kafka, and returns immediately with 202 Accepted.
+
+        Events are processed in batches and stored in ClickHouse for analytics.
+      operationId: ingestEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventRequest'
+            examples:
+              goal:
+                summary: Goal event
+                value:
+                  eventId: "550e8400-e29b-41d4-a716-446655440000"
+                  matchId: "match-2024-01-15-001"
+                  eventType: "goal"
+                  timestamp: "2024-01-15T14:45:00Z"
+                  teamId: 1
+                  playerId: "player-10"
+                  metadata:
+                    minute: 45
+                    scorer: "Player Name"
+              pass:
+                summary: Pass event
+                value:
+                  eventId: "550e8400-e29b-41d4-a716-446655440001"
+                  matchId: "match-2024-01-15-001"
+                  eventType: "pass"
+                  timestamp: "2024-01-15T14:30:00Z"
+                  teamId: 2
+                  playerId: "player-8"
+      responses:
+        '202':
+          description: Event accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidJson:
+                  summary: Invalid JSON
+                  value:
+                    error: "Bad Request"
+                    message: "invalid JSON body"
+                invalidUuid:
+                  summary: Invalid UUID
+                  value:
+                    error: "Bad Request"
+                    message: "must be a valid UUID"
+                    field: "eventId"
+        '503':
+          description: Service unavailable (Kafka connection issue)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/matches/{matchId}/metrics:
+    get:
+      tags:
+        - Metrics
+      summary: Get match engagement metrics
+      description: |
+        Retrieves real-time engagement metrics for a specific match including:
+        - Total event count
+        - Events broken down by type
+        - Goal, card counts
+        - Peak engagement minute
+        - Response time percentiles (p50, p95, p99)
+      operationId: getMatchMetrics
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          description: Unique identifier for the match
+          schema:
+            type: string
+          example: "match-2024-01-15-001"
+      responses:
+        '200':
+          description: Match metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchMetrics'
+        '400':
+          description: Invalid match ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Match not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Not Found"
+                message: "match not found"
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Liveness probe
+      description: Returns healthy status if the service is running. Used for Kubernetes liveness probes.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness probe
+      description: |
+        Checks dependency connectivity (ClickHouse). Returns ready status only if all
+        dependencies are available. Used for Kubernetes readiness probes.
+      operationId: readinessCheck
+      responses:
+        '200':
+          description: Service is ready to accept traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+              example:
+                status: "not ready"
+                timestamp: "2024-01-15T14:30:00Z"
+                checks:
+                  clickhouse: "unhealthy: connection refused"
+
+  /metrics:
+    get:
+      tags:
+        - Health
+      summary: Prometheus metrics
+      description: |
+        Exposes Prometheus-compatible metrics including:
+        - HTTP request counts and latency histograms
+        - Event ingestion counts by type
+        - Kafka producer metrics
+        - ClickHouse query metrics
+      operationId: prometheusMetrics
+      responses:
+        '200':
+          description: Prometheus metrics in text format
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP http_requests_total Total number of HTTP requests
+                # TYPE http_requests_total counter
+                http_requests_total{method="POST",path="/api/events",status="202"} 1523
+
+components:
+  schemas:
+    EventRequest:
+      type: object
+      required:
+        - eventId
+        - matchId
+        - eventType
+        - timestamp
+        - teamId
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: Unique identifier for the event
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        matchId:
+          type: string
+          description: Unique identifier for the match
+          example: "match-2024-01-15-001"
+        eventType:
+          type: string
+          enum:
+            - pass
+            - shot
+            - goal
+            - foul
+            - yellow_card
+            - red_card
+            - substitution
+            - offside
+            - corner
+            - free_kick
+            - interception
+          description: Type of match event
+          example: "goal"
+        timestamp:
+          type: string
+          format: date-time
+          description: When the event occurred (RFC3339 format)
+          example: "2024-01-15T14:45:00Z"
+        teamId:
+          type: integer
+          enum: [1, 2]
+          description: Team identifier (1 or 2)
+          example: 1
+        playerId:
+          type: string
+          description: Optional player identifier
+          example: "player-10"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Optional additional event data
+          example:
+            minute: 45
+            scorer: "Player Name"
+
+    EventResponse:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: The event ID that was accepted
+        status:
+          type: string
+          enum: [accepted]
+          description: Status of the event
+        timestamp:
+          type: string
+          format: date-time
+          description: When the event was accepted
+
+    MatchMetrics:
+      type: object
+      properties:
+        matchId:
+          type: string
+          description: Match identifier
+        totalEvents:
+          type: integer
+          format: int64
+          description: Total number of events for this match
+        eventsByType:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+          description: Event counts by type
+          example:
+            pass: 892
+            shot: 45
+            goal: 3
+        goals:
+          type: integer
+          format: int64
+          description: Number of goals
+        yellowCards:
+          type: integer
+          format: int64
+          description: Number of yellow cards
+        redCards:
+          type: integer
+          format: int64
+          description: Number of red cards
+        firstEventAt:
+          type: string
+          format: date-time
+          description: Timestamp of first event
+        lastEventAt:
+          type: string
+          format: date-time
+          description: Timestamp of last event
+        peakMinute:
+          $ref: '#/components/schemas/PeakEngagement'
+        responseTimePercentiles:
+          $ref: '#/components/schemas/ResponseTimePercentiles'
+
+    PeakEngagement:
+      type: object
+      properties:
+        minute:
+          type: string
+          format: date-time
+          description: The minute with peak engagement
+        eventCount:
+          type: integer
+          format: int64
+          description: Number of events in that minute
+
+    ResponseTimePercentiles:
+      type: object
+      properties:
+        p50:
+          type: number
+          format: double
+          description: 50th percentile response time in milliseconds
+        p95:
+          type: number
+          format: double
+          description: 95th percentile response time in milliseconds
+        p99:
+          type: number
+          format: double
+          description: 99th percentile response time in milliseconds
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy]
+          description: Health status
+        timestamp:
+          type: string
+          format: date-time
+          description: Current server time
+
+    ReadinessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ready, not ready]
+          description: Readiness status
+        timestamp:
+          type: string
+          format: date-time
+          description: Current server time
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+          description: Status of individual dependency checks
+          example:
+            clickhouse: "healthy"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error type
+          example: "Bad Request"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "must be a valid UUID"
+        field:
+          type: string
+          description: Field that caused the error (if applicable)
+          example: "eventId"
