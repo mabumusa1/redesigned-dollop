@@ -7,98 +7,64 @@ on:
     branches: [main]
 
 env:
-  GO_VERSION: '1.22'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   # ==========================================================================
-  # Linting and Code Quality
+  # Lint, Test, and Build in Devcontainer
   # ==========================================================================
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
-
-      - name: Run golangci-lint
-        run: golangci-lint run --timeout=5m ./...
-
-      - name: Check formatting
-        run: |
-          if [ -n "$(gofmt -l .)" ]; then
-            echo "Code is not formatted. Run 'gofmt -w .'"
-            gofmt -l .
-            exit 1
-          fi
-
-  # ==========================================================================
-  # Unit Tests with Coverage
-  # ==========================================================================
-  test:
-    name: Test
+  build:
+    name: Build & Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones disabled for better SonarQube analysis
+          fetch-depth: 0  # Full history for SonarQube
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Run in devcontainer
+        uses: devcontainers/ci@v0.3
         with:
-          go-version: ${{ env.GO_VERSION }}
+          runCmd: |
+            set -e
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+            echo "=== Installing golangci-lint ==="
+            curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
 
-      - name: Download dependencies
-        run: go mod download
+            echo "=== Checking code formatting ==="
+            if [ -n "$(gofmt -l .)" ]; then
+              echo "Code is not formatted. Run 'gofmt -w .'"
+              gofmt -l .
+              exit 1
+            fi
 
-      - name: Run tests with coverage
-        run: |
-          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+            echo "=== Running golangci-lint ==="
+            golangci-lint run --timeout=5m ./...
 
-      - name: Check coverage threshold
-        run: |
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
-          echo "Total coverage: ${COVERAGE}%"
+            echo "=== Running tests with coverage ==="
+            go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
-          # Extract integer part for comparison
-          COVERAGE_INT=$(echo $COVERAGE | cut -d. -f1)
+            echo "=== Checking coverage threshold ==="
+            COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+            echo "Total coverage: ${COVERAGE}%"
+            COVERAGE_INT=$(echo $COVERAGE | cut -d. -f1)
+            if [ "$COVERAGE_INT" -lt 30 ]; then
+              echo "Coverage ${COVERAGE}% is below 30% threshold"
+              exit 1
+            fi
+            echo "Coverage ${COVERAGE}% meets 30% threshold"
 
-          if [ "$COVERAGE_INT" -lt 30 ]; then
-            echo "Coverage ${COVERAGE}% is below 30% threshold"
-            exit 1
-          fi
-          echo "Coverage ${COVERAGE}% meets 30% threshold"
+            echo "=== Building binaries ==="
+            mkdir -p bin
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+              -ldflags="-w -s -X main.Version=${{ github.sha }}" \
+              -o bin/server ./cmd/server
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+              -ldflags="-w -s -X main.Version=${{ github.sha }}" \
+              -o bin/consumer ./cmd/consumer
+
+            echo "=== Build complete ==="
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -107,13 +73,20 @@ jobs:
           path: coverage.out
           retention-days: 1
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: bin/
+          retention-days: 7
+
   # ==========================================================================
   # SonarQube Analysis
   # ==========================================================================
   sonarqube:
     name: SonarQube
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [build]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,52 +106,25 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # ==========================================================================
-  # Build Binaries
+  # Security Scan
   # ==========================================================================
-  build:
-    name: Build
+  security:
+    name: Security Scan
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [build]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
         with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Build server
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-            -ldflags="-w -s -X main.Version=${{ github.sha }}" \
-            -o bin/server ./cmd/server
-
-      - name: Build consumer
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-            -ldflags="-w -s -X main.Version=${{ github.sha }}" \
-            -o bin/consumer ./cmd/consumer
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: binaries
-          path: bin/
-          retention-days: 7
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
 
   # ==========================================================================
   # Build and Push Docker Image (only on main, requires Dockerfile)
@@ -229,24 +175,3 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ github.sha }}
-
-  # ==========================================================================
-  # Security Scan
-  # ==========================================================================
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: [build]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
